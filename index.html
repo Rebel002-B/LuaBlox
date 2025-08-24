@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Lua Mini-Book — Lesson Reader</title>
+<style>
+  :root{
+    --bg: #0f1724; --surface:#0b1220; --text:#e6eef8; --muted:#9fb0c8; --accent:#8b5cf6;
+    --radius:14px; --glass: rgba(255,255,255,0.04);
+  }
+  /* White theme */
+  :root[data-theme="white"]{
+    --bg: #f6f7fb; --surface:#ffffff; --text:#0b1b2b; --muted:#415a75; --accent:#6b21a8;
+    --glass: rgba(2,6,23,0.02);
+  }
+  /* Purple mode */
+  :root[data-theme="purple"]{
+    --bg: #0b0714; --surface: linear-gradient(180deg,#120426,#0b1022); --text:#f7edff; --muted:#cbb7ff; --accent:#b388ff;
+    --glass: rgba(255,255,255,0.03);
+  }
+
+  html,body{height:100%;margin:0;font-family:Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background:var(--bg); color:var(--text); -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;}
+  .wrap{max-width:980px;margin:32px auto;padding:28px; background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent); border-radius:18px; box-shadow: 0 8px 30px rgba(2,6,23,0.5); overflow:hidden; display:grid; grid-template-columns: 280px 1fr; gap:20px;}
+  .sidebar{padding:18px;background:var(--surface); border-radius:12px; min-height:320px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);}
+  .main{padding:18px;background:var(--surface); border-radius:12px; min-height:320px; overflow:auto;}
+  h1{font-size:20px;margin:0 0 6px 0;}
+  p.lead{margin:6px 0 18px 0;color:var(--muted);font-size:14px;}
+  nav.toc{display:flex;flex-direction:column;gap:8px;margin-top:8px;}
+  .toc button{display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;border:0;background:transparent;color:var(--text);cursor:pointer;font-weight:600;text-align:left;}
+  .toc button.selected{background:linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));box-shadow:var(--glass) 0 0 0 1px inset;}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+  .btn{padding:9px 12px;border-radius:10px;border:0;background:var(--glass);color:var(--text);cursor:pointer;font-weight:600;}
+  .btn.primary{background:var(--accent);color:#061021;}
+  .meta{margin-top:12px;color:var(--muted);font-size:13px;}
+  .reader-controls{display:flex;gap:8px;align-items:center;margin-top:12px;}
+  select,input[type="range"]{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--text);padding:8px;border-radius:8px;}
+  .chapter{margin-bottom:18px;}
+  .chapter h2{margin:0 0 8px 0;font-size:18px;}
+  .chapter p{line-height:1.6;color:var(--text); margin:8px 0;}
+  .highlight{background:linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); padding:6px;border-radius:6px;box-shadow: inset 0 1px 0 rgba(255,255,255,0.01);}
+  footer{margin-top:12px;color:var(--muted);font-size:13px;text-align:center;}
+  .theme-toggle{display:flex;gap:8px;margin-top:14px}
+  .small{font-size:13px;color:var(--muted)}
+  /* responsiveness */
+  @media (max-width:880px){
+    .wrap{grid-template-columns:1fr; padding:18px}
+    .sidebar{order:2}
+    .main{order:1}
+  }
+</style>
+</head>
+<body>
+<div class="wrap" role="main" aria-labelledby="title">
+  <aside class="sidebar" aria-label="Table of contents">
+    <h1 id="title">Lua Mini-Book</h1>
+    <p class="lead">Three short chapters to get started with Lua. Use the voice controls to hear the lesson read aloud.</p>
+
+    <div class="controls">
+      <button class="btn primary" id="readAllBtn" title="Read all chapters">Read All</button>
+      <button class="btn" id="stopBtn" title="Stop reading">Stop</button>
+    </div>
+
+    <div class="meta">Voice: <br/>
+      <select id="voiceSelect" aria-label="Voice select"></select>
+      <div style="margin-top:8px">Rate:
+      <input id="rate" type="range" min="0.6" max="1.8" step="0.1" value="1"/> <span id="rateVal" class="small">1.0</span>
+      </div>
+      <div style="margin-top:8px">Pitch:
+      <input id="pitch" type="range" min="0.5" max="2.0" step="0.1" value="1"/> <span id="pitchVal" class="small">1.0</span>
+      </div>
+    </div>
+
+    <div style="margin-top:14px">
+      <strong class="small">Themes</strong>
+      <div class="theme-toggle" role="tablist" aria-label="Theme mode">
+        <button class="btn" data-theme="dark">Dark</button>
+        <button class="btn" data-theme="purple">Purple</button>
+        <button class="btn" data-theme="white">White</button>
+      </div>
+      <div class="meta" style="margin-top:8px">Saved to this browser. Works offline once loaded.</div>
+    </div>
+
+    <nav class="toc" id="toc" aria-label="Chapters">
+      <button class="toc-item selected" data-chapter="1">Chapter 1 — Printing & Variables</button>
+      <button class="toc-item" data-chapter="2">Chapter 2 — Tables & Functions</button>
+      <button class="toc-item" data-chapter="3">Chapter 3 — Conditionals & Loops</button>
+    </nav>
+
+    <footer>
+      <div class="small">Uses browser Speech Synthesis API for TTS.</div>
+      <div style="margin-top:6px" class="small">Made for learning Lua — single-file demo.</div>
+    </footer>
+  </aside>
+
+  <main class="main" id="reader" tabindex="0">
+    <!-- Chapters -->
+    <article class="chapter" id="chapter-1" data-chapter="1" aria-labelledby="ch1title">
+      <h2 id="ch1title">Chapter 1 — Printing & Variables</h2>
+      <p class="small">Short intro and code examples. (Click Play below to hear this chapter.)</p>
+      <p data-para>
+        Welcome to Lua. The first command you'll use is print. For example: print open parentheses double quote Hello comma space world exclamation double quote close parentheses. The print function writes text to the output.
+      </p>
+      <p data-para>
+        Variables store values. Use the local keyword for scoped variables. For example: local name equals "Sox" and local age equals 15. Then print them using print open parentheses "My name is", name, "and I am", age, "years old." close parentheses.
+      </p>
+      <div class="reader-controls">
+        <button class="btn" data-chapter-btn="1" data-action="play">Play</button>
+        <button class="btn" data-chapter-btn="1" data-action="pause">Pause</button>
+        <button class="btn" data-chapter-btn="1" data-action="stop">Stop</button>
+      </div>
+    </article>
+
+    <article class="chapter" id="chapter-2" data-chapter="2" aria-labelledby="ch2title">
+      <h2 id="ch2title">Chapter 2 — Tables & Functions</h2>
+      <p class="small">Tables are powerful — they act as arrays and dictionaries. Functions allow reusable code.</p>
+      <p data-para>
+        Tables can be lists. For example: local fruits equals open brace "apple", "banana", "cherry" close brace. Lua indices start at one. So fruits bracket one bracket returns apple.
+      </p>
+      <p data-para>
+        Tables can also hold named keys. For example: local person equals open brace name equals "Sox", age equals 15 close brace. Access person dot name to get the stored name.
+      </p>
+      <p data-para>
+        Functions are declared using the local function syntax. For example: local function greet open parentheses name close parentheses print open parentheses "Hello, " double dot name double dot "!" close parentheses end. Call greet with greet open parentheses "Sox" close parentheses.
+      </p>
+      <div class="reader-controls">
+        <button class="btn" data-chapter-btn="2" data-action="play">Play</button>
+        <button class="btn" data-chapter-btn="2" data-action="pause">Pause</button>
+        <button class="btn" data-chapter-btn="2" data-action="stop">Stop</button>
+      </div>
+    </article>
+
+    <article class="chapter" id="chapter-3" data-chapter="3" aria-labelledby="ch3title">
+      <h2 id="ch3title">Chapter 3 — Conditionals & Loops</h2>
+      <p class="small">Control flow with if statements and loops are core building blocks.</p>
+      <p data-para>
+        Conditionals use if, elseif, and else. For example: if age greater than or equal to 18 then print "You are an adult." elseif age greater than or equal to 13 then print "You are a teenager." else print "You are a kid." end.
+      </p>
+      <p data-para>
+        Loops repeat actions. A while loop example: local x equals 1 while x less than or equal to 5 do print x x equals x plus 1 end. A for loop from 1 to 5 looks like for i equals 1 comma 5 do print i end.
+      </p>
+      <p data-para>
+        You can loop tables with ipairs. For example: for index comma fruit in ipairs open parentheses fruits close parentheses do print index comma fruit end.
+      </p>
+      <div class="reader-controls">
+        <button class="btn" data-chapter-btn="3" data-action="play">Play</button>
+        <button class="btn" data-chapter-btn="3" data-action="pause">Pause</button>
+        <button class="btn" data-chapter-btn="3" data-action="stop">Stop</button>
+      </div>
+    </article>
+  </main>
+</div>
+
+<script>
+(function(){
+  // DOM refs
+  const voiceSelect = document.getElementById('voiceSelect');
+  const rateControl = document.getElementById('rate');
+  const pitchControl = document.getElementById('pitch');
+  const rateVal = document.getElementById('rateVal');
+  const pitchVal = document.getElementById('pitchVal');
+  const readAllBtn = document.getElementById('readAllBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const tocButtons = document.querySelectorAll('.toc-item');
+  const themeButtons = document.querySelectorAll('[data-theme]');
+  const chapters = Array.from(document.querySelectorAll('.chapter'));
+  let queue = []; // queued utterances for multi-para reading
+  let currentUtterance = null;
+  let isPaused = false;
+  let currentChapterIndex = 0;
+
+  // Theme handling
+  const root = document.documentElement;
+  const savedTheme = localStorage.getItem('lm_theme') || 'dark';
+  function applyTheme(name){
+    if(name === 'white'){ root.setAttribute('data-theme','white'); }
+    else if(name === 'purple'){ root.setAttribute('data-theme','purple'); }
+    else { root.removeAttribute('data-theme'); } // default dark
+    localStorage.setItem('lm_theme', name);
+  }
+  applyTheme(savedTheme);
+  themeButtons.forEach(btn => btn.addEventListener('click', e => applyTheme(btn.dataset.theme)));
+
+  // TOC navigation
+  function selectChapter(index){
+    tocButtons.forEach(b => b.classList.remove('selected'));
+    if(index < 0) index = 0;
+    if(index >= tocButtons.length) index = tocButtons.length -1;
+    tocButtons[index].classList.add('selected');
+    chapters.forEach(c => c.style.display = 'none');
+    const target = chapters[index];
+    target.style.display = '';
+    target.scrollIntoView({behavior:'smooth',block:'start'});
+    currentChapterIndex = index;
+  }
+  tocButtons.forEach((btn,i) => btn.addEventListener('click', ()=> selectChapter(i)));
+  // start with chapter 1 visible
+  selectChapter(0);
+
+  // Speech Synthesis helpers
+  function getVoices(){
+    return speechSynthesis.getVoices() || [];
+  }
+
+  function populateVoices(){
+    const voices = getVoices();
+    voiceSelect.innerHTML = '';
+    if(voices.length === 0){
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.text = 'Default (no voices found)';
+      voiceSelect.appendChild(opt);
+      return;
+    }
+    voices.forEach((v,i) => {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.text = `${v.name} — ${v.lang}${v.default ? ' — default' : ''}`;
+      voiceSelect.appendChild(opt);
+    });
+    // select saved voice if available
+    const saved = localStorage.getItem('lm_voice_index');
+    if(saved && voices[saved]) voiceSelect.value = saved;
+  }
+
+  populateVoices();
+  if (typeof speechSynthesis !== 'undefined') {
+    speechSynthesis.onvoiceschanged = populateVoices;
+  }
+
+  function stopAll(){
+    queue = [];
+    currentUtterance = null;
+    isPaused = false;
+    try { speechSynthesis.cancel(); } catch(e){}
+    clearHighlights();
+  }
+
+  function pauseAll(){
+    if (speechSynthesis.speaking && !speechSynthesis.paused){
+      speechSynthesis.pause();
+      isPaused = true;
+    } else if (speechSynthesis.paused){
+      speechSynthesis.resume();
+      isPaused = false;
+    }
+  }
+
+  stopBtn.addEventListener('click', stopAll);
+
+  // update rate/pitch UI
+  rateControl.addEventListener('input', () => {
+    rateVal.textContent = Number(rateControl.value).toFixed(1);
+    localStorage.setItem('lm_rate', rateControl.value);
+  });
+  pitchControl.addEventListener('input', () => {
+    pitchVal.textContent = Number(pitchControl.value).toFixed(1);
+    localStorage.setItem('lm_pitch', pitchControl.value);
+  });
+
+  // restore saved rate/pitch
+  const savedRate = localStorage.getItem('lm_rate');
+  const savedPitch = localStorage.getItem('lm_pitch');
+  if(savedRate) { rateControl.value = savedRate; rateVal.textContent = Number(savedRate).toFixed(1); }
+  if(savedPitch) { pitchControl.value = savedPitch; pitchVal.textContent = Number(savedPitch).toFixed(1); }
+
+  // Build utterances from paragraph text
+  function createUtterancesFromParagraphs(paragraphNodes){
+    // Split each paragraph into sentences for highlighting: naive split on punctuation.
+    const utterances = [];
+    paragraphNodes.forEach((pNode, pIndex) => {
+      const text = pNode.textContent.trim();
+      if(!text) return;
+      const sentences = text.match(/[^.!?]+[.!?]*/g) || [text];
+      sentences.forEach((s, sIndex) => {
+        const u = new SpeechSynthesisUtterance(s.trim());
+        // set voice, rate, pitch
+        const voiceIdx = voiceSelect.value;
+        const voices = getVoices();
+        if(voiceIdx !== '' && voices[voiceIdx]) u.voice = voices[voiceIdx];
+        u.rate = Number(rateControl.value);
+        u.pitch = Number(pitchControl.value);
+        // annotate with paragraph and sentence index for highlighting
+        u._meta = { pIndex, sIndex, origParaNode: pNode };
+        utterances.push(u);
+      });
+    });
+    return utterances;
+  }
+
+  function clearHighlights(){
+    document.querySelectorAll('[data-para]').forEach(n => n.classList.remove('highlight'));
+  }
+
+  function speakUtteranceQueue(list){
+    stopAll();
+    queue = list.slice();
+    if(queue.length === 0) return;
+    speakNextInQueue();
+  }
+
+  function speakNextInQueue(){
+    if(queue.length === 0) {
+      currentUtterance = null;
+      clearHighlights();
+      return;
+    }
+    const u = queue.shift();
+    currentUtterance = u;
+
+    // highlight corresponding paragraph
+    clearHighlights();
+    try {
+      u._meta.origParaNode.classList.add('highlight');
+    } catch(e){}
+
+    u.onend = () => {
+      // small delay to allow highlight to show naturally
+      setTimeout(() => {
+        speakNextInQueue();
+      }, 120);
+    };
+    u.onerror = () => {
+      // on error continue
+      speakNextInQueue();
+    };
+    speechSynthesis.speak(u);
+  }
+
+  // Chapter play/pause/stop wiring
+  document.querySelectorAll('[data-chapter-btn]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const chap = Number(btn.dataset.chapterBtn) - 1;
+      const action = btn.dataset.action;
+      const chapterEl = chapters[chap];
+      const paraNodes = Array.from(chapterEl.querySelectorAll('[data-para]'));
+
+      if(action === 'play'){
+        // create utterances and speak
+        const utterances = createUtterancesFromParagraphs(paraNodes);
+        speakUtteranceQueue(utterances);
+        selectChapter(chap);
+      } else if(action === 'pause'){
+        pauseAll();
+      } else if(action === 'stop'){
+        stopAll();
+      }
+    });
+  });
+
+  // Read all chapters
+  readAllBtn.addEventListener('click', () => {
+    // gather all paragraphs in order
+    const paras = [];
+    chapters.forEach(ch => paras.push(...ch.querySelectorAll('[data-para]')));
+    const u = createUtterancesFromParagraphs(paras);
+    speakUtteranceQueue(u);
+    selectChapter(0);
+  });
+
+  // keyboard controls: space to pause/resume, s to stop
+  window.addEventListener('keydown', (e) => {
+    if(e.code === 'Space') { e.preventDefault(); pauseAll(); }
+    if(e.key === 's' || e.key === 'S') { stopAll(); }
+  });
+
+  // Save voice selection
+  voiceSelect.addEventListener('change', ()=> {
+    localStorage.setItem('lm_voice_index', voiceSelect.value);
+  });
+
+  // populate initial display settings for chapter visibility
+  chapters.forEach((c, i) => {
+    if(i !== 0) c.style.display = 'none';
+  });
+
+  // accessibility: focus on selected chapter when clicked in TOC
+  tocButtons.forEach((btn,i) => {
+    btn.addEventListener('click', ()=> {
+      chapters[i].focus();
+    });
+  });
+
+  // show user if Speech Synthesis is unavailable
+  if(!('speechSynthesis' in window)){
+    const notice = document.createElement('div');
+    notice.style.marginTop = '12px';
+    notice.style.color = '#ffb4b4';
+    notice.textContent = 'Warning: your browser may not support the Speech Synthesis API. Try Chrome, Edge, or Firefox.';
+    document.querySelector('.sidebar').appendChild(notice);
+  }
+})();
+</script>
+</body>
+</html>
